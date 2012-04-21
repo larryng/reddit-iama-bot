@@ -96,6 +96,7 @@ def format_qa(qalst, host, limit=10000):
 
 
 def process_iama(db, iama):
+  print 'Processing', iama.permalink, '...'
   host = iama.author
   comments = iama.comments()
   
@@ -150,10 +151,11 @@ def main():
     iamas = [iama for iama in api.hot('iama')
              if (iama.num_comments > MIN_COMMENTS and
                  'request' not in iama.title)]
+    print 'Processing {} IAMAs...'.format(len(iamas))
     for iama in iamas:
       process_iama(db, iama)
+    print 'Processing done.'
 
 
 if __name__ == "__main__":
-  print 'Going!'
   main()
