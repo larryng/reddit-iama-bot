@@ -116,29 +116,39 @@ def process_iama(db, iama):
   
   new_sqalst = []
   rid = iama.name
-  for i, sqa in enumerate(sqalst):
-    if old_sqalst and i < len(old_sqalst):
-      rid = old_sqalst[i]['rid']
-      if i == 0 or sqa != old_sqalst[i]['body']:
-        c = iama._reddit.edit(rid, sqa)
-        print u'Edited', c.permalink
-        mysleep()
+  sleep = True
+  try:
+    for i, sqa in enumerate(sqalst):
+      if old_sqalst and i < len(old_sqalst):
+        rid = old_sqalst[i]['rid']
+        if i == 0 or sqa != old_sqalst[i]['body']:
+          c = iama._reddit.edit(rid, sqa)
+          sleep = True
+          print u'Edited', c.permalink
+        else:
+          sleep = False
+          print u'No change:', rid
       else:
-        print u'No change:', rid
-    else:
-      c = iama._reddit.comment(rid, sqa)
-      rid = c.name
-      print u'Posted', c.permalink
-      mysleep()
-    new_sqalst.append({'rid': rid,
-                       'body': sqa})
-
-  new_comp = {'link': iama.permalink,
-              'sqalst': new_sqalst}
-  
-  db.comps.update(query, 
-                  {'$set': new_comp},
-                  upsert=True)
+        c = iama._reddit.comment(rid, sqa)
+        rid = c.name
+        sleep = True
+        print u'Posted', c.permalink
+      new_sqalst.append({'rid': rid,
+                         'body': sqa})
+      if sleep:
+        mysleep()
+  except Exception as e:
+    raise e
+  finally:
+    print 'Saving what we did to DB...'
+    if old_sqalst and len(old_sqalst) > len(new_sqalst):
+      new_sqalst = new_sqalst + old_sqalst[len(new_sqalst):]
+    new_comp = {'link': iama.permalink,
+                'sqalst': new_sqalst}
+    db.comps.update(query, 
+                    {'$set': new_comp},
+                    upsert=True)
+    print '... done.'
   print u'Finished:', iama.permalink
 
 
