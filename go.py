@@ -87,7 +87,7 @@ def format_qa(qalst, host, limit=10000):
       header = SECOND_HEADER_FORMAT.format(page) 
       slst = [header,
               s]
-      charcount = len(s) + len(header) + 1
+      charcount = len(s) + len(header) + 2
     else:
       slst.append(s)
   if slst:
