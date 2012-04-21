@@ -13,7 +13,7 @@ PASSWORD = os.environ['REDDIT_PASSWORD']
 MONGO_URI = os.environ['MONGOLAB_URI']
 DB_NAME = urlparse.urlparse(MONGO_URI).path.strip('/')
 
-MIN_COMMENTS = 150
+MIN_COMMENTS = 200
 HEADER_FORMAT = (
   u'Most (if not all) of the answers from [{host}](/user/{host}/) (updated: {last_updated}):\n\n'
   u'*****\n'
@@ -95,6 +95,11 @@ def format_qa(qalst, host, limit=10000):
   return rlst
 
 
+def mysleep():
+  time.sleep(WAIT_TIME)
+  print u'Waiting {} seconds...'.format(WAIT_TIME)
+
+
 def process_iama(db, iama):
   print 'Processing', iama.permalink, '...'
   host = iama.author
@@ -117,16 +122,16 @@ def process_iama(db, iama):
       if i == 0 or sqa.split(u'\n', 1)[1] != old_sqalst[i]['body'].split(u'\n', 1)[1]:
         c = iama._reddit.edit(rid, sqa)
         print u'Edited', c.permalink
+        mysleep()
       else:
         print u'No change:', rid
     else:
       c = iama._reddit.comment(rid, sqa)
       rid = c.name
       print u'Posted', c.permalink
+      mysleep()
     new_sqalst.append({'rid': rid,
                        'body': sqa})
-    print u'Waiting {} seconds...'.format(WAIT_TIME)
-    time.sleep(WAIT_TIME)
 
   new_comp = {'link': iama.permalink,
               'sqalst': new_sqalst}
