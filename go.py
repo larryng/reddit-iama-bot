@@ -13,8 +13,12 @@ USERNAME = os.environ['REDDIT_USERNAME']
 PASSWORD = os.environ['REDDIT_PASSWORD']
 MONGO_URI = os.environ['MONGOLAB_URI']
 DB_NAME = urlparse.urlparse(MONGO_URI).path.strip('/')
+MIN_COMMENTS = os.environ.get('IAMA_MIN_COMMENTS', 200)
+WAIT_TIME = float(os.environ.get('IAMA_WAIT_TIME', 60.0))
 
-MIN_COMMENTS = 200
+BASE_URL = u'http://www.reddit.com/'
+TIME_FORMAT = u"%b %d, %Y @ %I:%M:%S %P EST"
+
 HEADER_FORMAT = (
   u'Most (if not all) of the answers from [{host}](/user/{host}/) (updated: {last_updated}):\n\n'
   u'*****\n'
@@ -35,10 +39,7 @@ TOP_FORMAT = (
   u'{answer}\n\n'
   u'*****\n'
 )
-TIME_FORMAT = u"%b %d, %Y @ %I:%M:%S %P EST"
-BASE_URL = u'http://www.reddit.com/'
-BOT_NAME = u'narwal_bot'
-WAIT_TIME = 60.0
+
 
 def quotify(s):
   return u'> {}'.format(s.replace('\n', '\n> '))
@@ -55,7 +56,7 @@ def get_qa(first_comments, author):
       if not isinstance(comment, narwal.things.Comment):
         continue
       if comment.author == author:
-        if not parent or parent.author != BOT_NAME:
+        if not parent or parent.author != USERNAME:
           lst.append((parent, comment))
       if comment.replies:
         lst += helper(comment.replies, comment)
