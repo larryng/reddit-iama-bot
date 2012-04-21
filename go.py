@@ -103,7 +103,7 @@ def mysleep():
 
 
 def process_iama(db, iama):
-  print u'Processing', iama.permalink, u'...'
+  print u'Processing {} ...'.format(iama.permalink)
   host = iama.author
   comments = iama.comments()
   
@@ -126,15 +126,15 @@ def process_iama(db, iama):
         if i == 0 or sqa != old_sqalst[i]['body']:
           c = iama._reddit.edit(rid, sqa)
           sleep = True
-          print u'Edited', c.permalink
+          print u'Edited {}'.format(c.permalink)
         else:
           sleep = False
-          print u'No change:', rid
+          print u'No change: {}'.format(rid)
       else:
         c = iama._reddit.comment(rid, sqa)
         rid = c.name
         sleep = True
-        print u'Posted', c.permalink
+        print u'Posted {}'.format(c.permalink)
       new_sqalst.append({'rid': rid,
                          'body': sqa})
       if sleep:
@@ -151,7 +151,7 @@ def process_iama(db, iama):
                     {'$set': new_comp},
                     upsert=True)
     print u'... done.'
-  print u'Finished:', iama.permalink
+  print u'Finished: {}'.format(iama.permalink)
 
 
 def main():
