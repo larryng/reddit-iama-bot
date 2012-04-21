@@ -96,8 +96,8 @@ def format_qa(qalst, host, limit=10000):
 
 
 def mysleep():
-  time.sleep(WAIT_TIME)
   print u'Waiting {} seconds...'.format(WAIT_TIME)
+  time.sleep(WAIT_TIME)
 
 
 def process_iama(db, iama):
@@ -119,7 +119,7 @@ def process_iama(db, iama):
   for i, sqa in enumerate(sqalst):
     if old_sqalst and i < len(old_sqalst):
       rid = old_sqalst[i]['rid']
-      if i == 0 or sqa.split(u'\n', 1)[1] != old_sqalst[i]['body'].split(u'\n', 1)[1]:
+      if i == 0 or sqa != old_sqalst[i]['body']:
         c = iama._reddit.edit(rid, sqa)
         print u'Edited', c.permalink
         mysleep()
