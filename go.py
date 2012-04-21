@@ -83,7 +83,7 @@ def format_qa(qalst, host, limit=10000):
       s = TOP_FORMAT.format(alink=a.permalink, answer=quotify(a.body))
     charcount += len(s) + 1
     if charcount >= limit:
-      rlst.append('\n'.join(slst))
+      rlst.append(u'\n'.join(slst))
       page += 1
       header = SECOND_HEADER_FORMAT.format(page) 
       slst = [header,
@@ -92,7 +92,7 @@ def format_qa(qalst, host, limit=10000):
     else:
       slst.append(s)
   if slst:
-    rlst.append('\n'.join(slst))
+    rlst.append(u'\n'.join(slst))
   return rlst
 
 
@@ -102,7 +102,7 @@ def mysleep():
 
 
 def process_iama(db, iama):
-  print u'Processing', iama.permalink, '...'
+  print u'Processing', iama.permalink, u'...'
   host = iama.author
   comments = iama.comments()
   
