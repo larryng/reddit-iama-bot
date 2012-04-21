@@ -44,7 +44,7 @@ def quotify(s):
   return u'> {}'.format(s.replace('\n', '\n> '))
 
 
-def log(s)
+def log(s):
   print s.encode('utf8')
 
 
