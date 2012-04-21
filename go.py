@@ -27,6 +27,9 @@ SECOND_HEADER_FORMAT = (
   u'(page {})\n\n'
   u'*****\n'
 )
+FOOTER = (
+  u'(continued below)'
+)
 QA_FORMAT = (
   u'**[Question]({qlink}?context=1) ({asker}):**\n\n'
   u'{question}\n\n'
@@ -88,7 +91,8 @@ def format_qa(qalst, host, limit=10000):
     else:
       s = TOP_FORMAT.format(alink=a.permalink, answer=quotify(a.body))
     charcount += len(s) + 1
-    if charcount >= limit:
+    if charcount >= (limit - len(FOOTER)):
+      slst.append(FOOTER)
       rlst.append(u'\n'.join(slst))
       page += 1
       header = SECOND_HEADER_FORMAT.format(page) 
