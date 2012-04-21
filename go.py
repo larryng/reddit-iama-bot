@@ -68,7 +68,7 @@ def format_qa(qalst, host, limit=10000):
   rlst = []
   slst = [HEADER_FORMAT.format(last_updated=time.strftime(TIME_FORMAT, time.localtime()),
                                host=host)]
-  charcount = 0
+  charcount = len(slst[0])
   page = 1
   for q, a in qalst:
     if q:
@@ -87,7 +87,7 @@ def format_qa(qalst, host, limit=10000):
       header = SECOND_HEADER_FORMAT.format(page) 
       slst = [header,
               s]
-      charcount = len(s) + len(header)
+      charcount = len(s) + len(header) + 1
     else:
       slst.append(s)
   if slst:
