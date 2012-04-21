@@ -171,7 +171,8 @@ def main():
   else:
     iamas = [iama for iama in api.hot('iama')
              if (iama.num_comments > MIN_COMMENTS and
-                 'request' not in iama.title.lower())]
+                 'request' not in iama.title.lower() and
+                 iama.author != u'[deleted]')]
     log(u'Processing {} IAMAs...'.format(len(iamas)))
     for iama in iamas:
       process_iama(db, iama)
