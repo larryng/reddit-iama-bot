@@ -10,7 +10,18 @@ import urlparse
 
 USERNAME = os.environ['REDDIT_USERNAME']
 PASSWORD = os.environ['REDDIT_PASSWORD']
+MONGO_URI = os.environ['MONGOLAB_URI']
+DB_NAME = urlparse.urlparse(MONGO_URI).path.strip('/')
 
+MIN_COMMENTS = 150
+HEADER_FORMAT = (
+  u'Most (if not all) of the answers from [{host}](/user/{host}/) (updated: {last_updated}):\n\n'
+  u'*****\n'
+)
+SECOND_HEADER_FORMAT = (
+  u'(page {})\n\n'
+  u'*****\n'
+)
 QA_FORMAT = (
   u'**[Question]({qlink}?context=1) ({asker}):**\n\n'
   u'{question}\n\n'
@@ -22,18 +33,10 @@ TOP_FORMAT = (
   u'**Top-level Comment:**\n\n'
   u'{answer}\n'
 )
-HEADER_FORMAT = (
-  u'Answers from [{host}](/user/{host}/) (last updated: {last_updated}):\n\n'
-  u'*****\n'
-)
-SECOND_HEADER_FORMAT = (
-  u'(page {})\n\n'
-  u'*****\n'
-)
 TIME_FORMAT = "%b %d, %Y @ %I:%M:%S %P EST"
 BASE_URL = u'http://www.reddit.com/'
 BOT_NAME = u'narwal_bot'
-
+WAIT_TIME = 60.0
 
 def quotify(s):
   return u'> {}'.format(s.replace('\n', '\n> '))
@@ -51,17 +54,23 @@ def get_qa(first_comments, author):
       if comment.replies:
         lst += helper(comment.replies, comment)
     return lst
-  lst = helper(first_comments)
-  return sorted(lst, key=lambda (p, c): c.created)
+  qalst = helper(first_comments)
+  if qalst:
+    return sorted(qalst, key=lambda (p, c): c.created)
+  else:
+    return lst
 
 
-def format_qa(lst, host, limit=10000):
+def format_qa(qalst, host, limit=10000):
+  if not qalst:
+    return []
+  
   rlst = []
   slst = [HEADER_FORMAT.format(last_updated=time.strftime(TIME_FORMAT, time.localtime()),
                                host=host)]
   charcount = 0
   page = 1
-  for q, a in lst:
+  for q, a in qalst:
     if q:
       s = QA_FORMAT.format(qlink=q.permalink,
                            alink=a.permalink,
@@ -86,28 +95,65 @@ def format_qa(lst, host, limit=10000):
   return rlst
 
 
-def compile(api, path):
-  listblob = api.get(path)
-  link = listblob[0][0]
-  comments = listblob[1]
-  qa = get_qa(comments, link.author)
-  sqa = format_qa(qa, link.author)
-  return link.author, sqa
+def process_iama(db, iama):
+  host = iama.author
+  comments = iama.comments()
+  
+  qalst = get_qa(comments, host)
+  if not qalst:
+    return
+  sqalst = format_qa(qalst, host)
+  
+  query = {'link': iama.permalink}
+  old_comp = db.comps.find_one(query)
+  old_sqalst = old_comp['sqalst'] if old_comp else None
+  
+  new_sqalst = []
+  rid = iama.name
+  for i, sqa in enumerate(sqalst):
+    if old_sqalst and i < len(old_sqalst):
+      rid = old_sqalst[i]['rid']
+      if i == 0 or sqa.split(u'\n', 1)[1] != old_sqalst[i]['body'].split(u'\n', 1)[1]:
+        c = iama._reddit.edit(rid, sqa)
+        print u'Edited', c.permalink
+      else:
+        print u'No change:', rid
+    else:
+      c = iama._reddit.comment(rid, sqa)
+      rid = c.name
+      print u'Posted', c.permalink
+    new_sqalst.append({'rid': rid,
+                       'body': sqa})
+    print u'Waiting {} seconds...'.format(WAIT_TIME)
+    time.sleep(WAIT_TIME)
+
+  new_comp = {'link': iama.permalink,
+              'sqalst': new_sqalst}
+  
+  db.comps.update(query, 
+                  {'$set': new_comp},
+                  upsert=True)
+  print u'Finished:', iama.permalink
 
 
 def main():
+  connection = pymongo.Connection(MONGO_URI)
+  db = connection[DB_NAME]
+  api = narwal.connect(USERNAME, PASSWORD, user_agent='narwal_bot iama bot')
   if len(sys.argv) == 2:
-    api = narwal.connect(USERNAME, PASSWORD, user_agent='narwal_bot iama bot')
     path = sys.argv[1]
     if path.startswith(BASE_URL):
       path = path[len(BASE_URL):]
-    host, sqa = compile(api, path)
-    for i, s in enumerate(sqa):
-      with open('{}{}.txt'.format(host, i), 'w') as f:
-        f.write(s)
+    iama = api.get(path)[0][0]
+    process_iama(db, iama)
   else:
-    print 'wrong args'
+    iamas = [iama for iama in api.hot('iama')
+             if (iama.num_comments > MIN_COMMENTS and
+                 'request' not in iama.title)]
+    for iama in iamas:
+      process_iama(db, iama)
 
 
 if __name__ == "__main__":
+  print 'Going!'
   main()
