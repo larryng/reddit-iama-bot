@@ -44,6 +44,10 @@ def quotify(s):
   return u'> {}'.format(s.replace('\n', '\n> '))
 
 
+def log(s)
+  print s.encode('utf8')
+
+
 def get_qa(first_comments, author):
   def helper(comments, parent=None):
     lst = []
@@ -98,12 +102,12 @@ def format_qa(qalst, host, limit=10000):
 
 
 def mysleep():
-  print u'Waiting {} seconds...'.format(WAIT_TIME)
+  log(u'Waiting {} seconds...'.format(WAIT_TIME))
   time.sleep(WAIT_TIME)
 
 
 def process_iama(db, iama):
-  print u'Processing {} ...'.format(iama.permalink)
+  log(u'Processing {} ...'.format(iama.permalink))
   host = iama.author
   comments = iama.comments()
   
@@ -126,15 +130,15 @@ def process_iama(db, iama):
         if i == 0 or sqa != old_sqalst[i]['body']:
           c = iama._reddit.edit(rid, sqa)
           sleep = True
-          print u'Edited {}'.format(c.permalink)
+          log(u'Edited {}'.format(c.permalink))
         else:
           sleep = False
-          print u'No change: {}'.format(rid)
+          log(u'No change: {}'.format(rid))
       else:
         c = iama._reddit.comment(rid, sqa)
         rid = c.name
         sleep = True
-        print u'Posted {}'.format(c.permalink)
+        log(u'Posted {}'.format(c.permalink))
       new_sqalst.append({'rid': rid,
                          'body': sqa})
       if sleep:
@@ -142,7 +146,7 @@ def process_iama(db, iama):
   except Exception as e:
     raise e
   finally:
-    print u'Saving what we did to DB...'
+    log(u'Saving what we did to DB...')
     if old_sqalst and len(old_sqalst) > len(new_sqalst):
       new_sqalst = new_sqalst + old_sqalst[len(new_sqalst):]
     new_comp = {'link': iama.permalink,
@@ -150,8 +154,8 @@ def process_iama(db, iama):
     db.comps.update(query, 
                     {'$set': new_comp},
                     upsert=True)
-    print u'... done.'
-  print u'Finished: {}'.format(iama.permalink)
+    log(u'... done.')
+  log(u'Finished: {}'.format(iama.permalink))
 
 
 def main():
@@ -168,10 +172,10 @@ def main():
     iamas = [iama for iama in api.hot('iama')
              if (iama.num_comments > MIN_COMMENTS and
                  'request' not in iama.title)]
-    print u'Processing {} IAMAs...'.format(len(iamas))
+    log('u'Processing {} IAMAs...'.format(len(iamas)))
     for iama in iamas:
       process_iama(db, iama)
-    print u'Processing done.'
+    log(u'Processing done.'.encode('utf8'))
 
 
 if __name__ == "__main__":
