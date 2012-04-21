@@ -30,10 +30,11 @@ QA_FORMAT = (
   u'*****\n'
 )
 TOP_FORMAT = (
-  u'**Top-level Comment:**\n\n'
-  u'{answer}\n'
+  u'**[Top-level Comment]({alink}):**\n\n'
+  u'{answer}\n\n'
+  u'*****\n'
 )
-TIME_FORMAT = "%b %d, %Y @ %I:%M:%S %P EST"
+TIME_FORMAT = u"%b %d, %Y @ %I:%M:%S %P EST"
 BASE_URL = u'http://www.reddit.com/'
 BOT_NAME = u'narwal_bot'
 WAIT_TIME = 60.0
@@ -79,7 +80,7 @@ def format_qa(qalst, host, limit=10000):
                            host=host,
                            answer=quotify(a.body))
     else:
-      s = TOP_FORMAT.format(answer=quotify(a.body))
+      s = TOP_FORMAT.format(alink=a.permalink, answer=quotify(a.body))
     charcount += len(s) + 1
     if charcount >= limit:
       rlst.append('\n'.join(slst))
@@ -101,7 +102,7 @@ def mysleep():
 
 
 def process_iama(db, iama):
-  print 'Processing', iama.permalink, '...'
+  print u'Processing', iama.permalink, '...'
   host = iama.author
   comments = iama.comments()
   
@@ -140,7 +141,7 @@ def process_iama(db, iama):
   except Exception as e:
     raise e
   finally:
-    print 'Saving what we did to DB...'
+    print u'Saving what we did to DB...'
     if old_sqalst and len(old_sqalst) > len(new_sqalst):
       new_sqalst = new_sqalst + old_sqalst[len(new_sqalst):]
     new_comp = {'link': iama.permalink,
@@ -148,7 +149,7 @@ def process_iama(db, iama):
     db.comps.update(query, 
                     {'$set': new_comp},
                     upsert=True)
-    print '... done.'
+    print u'... done.'
   print u'Finished:', iama.permalink
 
 
@@ -166,10 +167,10 @@ def main():
     iamas = [iama for iama in api.hot('iama')
              if (iama.num_comments > MIN_COMMENTS and
                  'request' not in iama.title)]
-    print 'Processing {} IAMAs...'.format(len(iamas))
+    print u'Processing {} IAMAs...'.format(len(iamas))
     for iama in iamas:
       process_iama(db, iama)
-    print 'Processing done.'
+    print u'Processing done.'
 
 
 if __name__ == "__main__":
