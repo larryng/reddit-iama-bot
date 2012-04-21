@@ -1,14 +1,43 @@
 #!/usr/bin/python
 
+import os
 import sys
 import time
 import narwal
+import pymongo
+import urlparse
 
 
-AUTHOR = ''
+USERNAME = os.environ['REDDIT_USERNAME']
+PASSWORD = os.environ['REDDIT_PASSWORD']
+
+QA_FORMAT = (
+  u'**[Question]({qlink}?context=1) ({asker}):**\n\n'
+  u'{question}\n\n'
+  u'**[Answer]({alink}?context=1) ({host}):**\n\n'
+  u'{answer}\n\n'
+  u'*****\n'
+)
+TOP_FORMAT = (
+  u'**Top-level Comment:**\n\n'
+  u'{answer}\n'
+)
+HEADER_FORMAT = (
+  u'Answers from [{host}](/user/{host}/) (last updated: {last_updated}):\n\n'
+  u'*****\n'
+)
+SECOND_HEADER_FORMAT = (
+  u'(page {})\n\n'
+  u'*****\n'
+)
+TIME_FORMAT = "%b %d, %Y @ %I:%M:%S %P EST"
+BASE_URL = u'http://www.reddit.com/'
+BOT_NAME = u'narwal_bot'
+
 
 def quotify(s):
   return u'> {}'.format(s.replace('\n', '\n> '))
+
 
 def get_qa(first_comments, author):
   def helper(comments, parent=None):
@@ -17,65 +46,68 @@ def get_qa(first_comments, author):
       if not isinstance(comment, narwal.things.Comment):
         continue
       if comment.author == author:
-        lst.append((parent, comment))
+        if not parent or parent.author != BOT_NAME:
+          lst.append((parent, comment))
       if comment.replies:
         lst += helper(comment.replies, comment)
     return lst
   lst = helper(first_comments)
   return sorted(lst, key=lambda (p, c): c.created)
 
-def format_qa(lst, limit=10000):
+
+def format_qa(lst, host, limit=10000):
   rlst = []
-  slst = [u'Last updated: {}\n'.format(time.strftime("%b %d, %Y @ %I:%M:%S %P EST", time.localtime())),
-          u'The following is an automated compilation of answers from the IAMA host:\n']
+  slst = [HEADER_FORMAT.format(last_updated=time.strftime(TIME_FORMAT, time.localtime()),
+                               host=host)]
   charcount = 0
+  page = 1
   for q, a in lst:
     if q:
-      s = (u'**[Question]({qlink}) ({asker}):**\n\n'
-           u'{question}\n\n'
-           u'**Answer:**\n\n'
-           u'{answer}\n\n'
-           u'*****\n').format(qlink=q.permalink,
-                              asker=q.author if hasattr(q, 'author') else u'[deleted]',
-                              question=quotify(q.body if hasattr(q, 'body') else u'[deleted]'),
-                              answer=quotify(a.body))
+      s = QA_FORMAT.format(qlink=q.permalink,
+                           alink=a.permalink,
+                           asker=q.author if q.author else u'[deleted]',
+                           question=quotify(q.body if q.body else u'[deleted]'),
+                           host=host,
+                           answer=quotify(a.body))
     else:
-      s = (u'**Top-level Comment:**\n\n'
-           u'{answer}\n\n').format(answer=quotify(a.body))
-    charcount += len(s)
+      s = TOP_FORMAT.format(answer=quotify(a.body))
+    charcount += len(s) + 1
     if charcount >= limit:
       rlst.append('\n'.join(slst))
-      slst = [s]
-      charcount = len(s)
+      page += 1
+      header = SECOND_HEADER_FORMAT.format(page) 
+      slst = [header,
+              s]
+      charcount = len(s) + len(header)
     else:
       slst.append(s)
   if slst:
     rlst.append('\n'.join(slst))
   return rlst
 
+
 def compile(api, path):
-  global AUTHOR
   listblob = api.get(path)
   link = listblob[0][0]
   comments = listblob[1]
   qa = get_qa(comments, link.author)
-  sqa = format_qa(qa)
-  AUTHOR = link.author
-  return sqa
+  sqa = format_qa(qa, link.author)
+  return link.author, sqa
 
-BASE_URL = u'http://www.reddit.com/'
+
 def main():
-  global AUTHOR
   if len(sys.argv) == 2:
-    api = narwal.connect('narwal_bot', 'wordpass', user_agent='narwal_bot iama bot')
+    api = narwal.connect(USERNAME, PASSWORD, user_agent='narwal_bot iama bot')
     path = sys.argv[1]
     if path.startswith(BASE_URL):
       path = path[len(BASE_URL):]
-    for i, s in enumerate(compile(api, path)):
-      with open('{}{}.txt'.format(AUTHOR, i), 'w') as f:
+    host, sqa = compile(api, path)
+    for i, s in enumerate(sqa):
+      with open('{}{}.txt'.format(host, i), 'w') as f:
         f.write(s)
   else:
     print 'wrong args'
+
 
 if __name__ == "__main__":
   main()
