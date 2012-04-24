@@ -71,6 +71,11 @@ def get_qa(first_comments, author):
     return lst
 
 
+def est_future_comments(link, now=None):
+  now = now or time.time()
+  return int((link.num_comments / (now - link.created_utc)) * (60*60) + link.num_comments)
+
+
 def format_qa(qalst, host, limit=10000):
   if not qalst:
     return []
@@ -175,7 +180,7 @@ def main():
     process_iama(db, iama)
   else:
     iamas = [iama for iama in api.hot('iama')
-             if (iama.num_comments > MIN_COMMENTS and
+             if (est_future_comments(iama) > MIN_COMMENTS and
                  'ama request' not in iama.title.lower() and
                  iama.author != u'[deleted]')]
     log(u'Processing {} IAMAs...'.format(len(iamas)))
