@@ -179,8 +179,9 @@ def main():
     iama = api.get(path)[0][0]
     process_iama(db, iama)
   else:
+    now = time.time()
     iamas = [iama for iama in api.hot('iama')
-             if (est_future_comments(iama) > MIN_COMMENTS and
+             if (est_future_comments(iama, now) > MIN_COMMENTS and
                  'ama request' not in iama.title.lower() and
                  iama.author != u'[deleted]')]
     log(u'Processing {} IAMAs...'.format(len(iamas)))
