@@ -33,9 +33,9 @@ FOOTER = (
 )
 QA_FORMAT = (
   u'**[Question]({qlink}?context=1) ({asker}):**\n\n'
-  u'{question}\n\n'
+  u'{qbody}\n\n'
   u'**[Answer]({alink}?context=1) ({host}):**\n\n'
-  u'{answer}\n\n'
+  u'{abody}\n\n'
   u'*****\n'
 )
 TOP_FORMAT = (
@@ -53,13 +53,13 @@ def quotify(s):
   return u'> {}'.format(s.replace('\n', '\n> '))
 
 
-def get_qa(first_comments, author):
+def get_qalst(host, first_comments):
   def helper(comments, parent=None):
     lst = []
     for comment in comments:
       if not isinstance(comment, narwal.things.Comment):
         continue
-      if comment.author == author:
+      if comment.author == host:
         if not parent or parent.author != USERNAME:
           lst.append((parent, comment))
       if comment.replies:
@@ -109,13 +109,13 @@ def format_normal(host, question, answer):
     qlink=question.permalink,
     alink=answer.permalink,
     asker=question.author if question.author else u'[deleted]',
-    question=quotify(question.body if question.body else u'[deleted]'),
+    qbody=quotify(question.body if question.body else u'[deleted]'),
     host=host,
-    answer=quotify(abody)
+    abody=quotify(abody)
   )
 
 
-def format_qa(qalst, host, limit=MAX_COMMENT_LENGTH):
+def generate_pages(host, qalst, limit=MAX_COMMENT_LENGTH):
   if not qalst:
     return []
   
@@ -156,46 +156,44 @@ def process_iama(db, iama):
   host = iama.author
   comments = iama.comments()
   
-  qalst = get_qa(comments, host)
+  qalst = get_qalst(host, comments) # list of (question, answer) pairs
   if not qalst:
     return
-  sqalst = format_qa(qalst, host)
+  pages = generate_pages(host, qalst)
   
   query = {'link': iama.permalink}
   old_comp = db.comps.find_one(query)
-  old_sqalst = old_comp['sqalst'] if old_comp else None
+  old_pages = old_comp['pages'] if old_comp else None
   
-  new_sqalst = []
+  new_pages = []
   rid = iama.name
-  sleep = True
   try:
-    for i, sqa in enumerate(sqalst):
-      if old_sqalst and i < len(old_sqalst):
-        rid = old_sqalst[i]['rid']
-        if i == 0 or sqa != old_sqalst[i]['body']:
-          c = iama._reddit.edit(rid, sqa)
-          sleep = True
+    for i, page in enumerate(pages):
+      sleep = True
+      if old_pages and i < len(old_pages):
+        rid = old_pages[i]['rid']
+        if i == 0 or page != old_pages[i]['body']:
+          c = iama._reddit.edit(rid, page)
           log(u'Edited {}'.format(c.permalink))
         else:
           sleep = False
           log(u'No change: {}'.format(rid))
       else:
-        c = iama._reddit.comment(rid, sqa)
+        c = iama._reddit.comment(rid, page)
         rid = c.name
-        sleep = True
         log(u'Posted {}'.format(c.permalink))
-      new_sqalst.append({'rid': rid,
-                         'body': sqa})
+      new_pages.append({'rid': rid,
+                        'body': page})
       if sleep:
         mysleep()
   except Exception as e:
     raise e
   finally:
     log(u'Saving what we did to DB...')
-    if old_sqalst and len(old_sqalst) > len(new_sqalst):
-      new_sqalst = new_sqalst + old_sqalst[len(new_sqalst):]
+    if old_pages and len(old_pages) > len(new_pages):
+      new_pages = new_pages + old_pages[len(new_pages):]
     new_comp = {'link': iama.permalink,
-                'sqalst': new_sqalst}
+                'pages': new_pages}
     db.comps.update(query, 
                     {'$set': new_comp},
                     upsert=True)
@@ -204,28 +202,44 @@ def process_iama(db, iama):
 
 
 def estimate_future_comments(link, now=None):
+  """linear estimate of the number of comments the iama will have in 1 hour"""
   now = now or time.time()
-  return int((link.num_comments / (now - link.created_utc)) * (60 * 60) + link.num_comments)
+  comments_per_second = link.num_comments / (now - link.created_utc)
+  return int(link.num_comments + comments_per_second * 3600)
 
 
 def qualifies(iama):
+  """returns true if iama qualifies to be processed.
+  
+  iama qualifies if all of the following are true:
+    - it will likely have over MIN_COMMENTS within the next hour
+    - it is not an ama request
+    - the iama host account still exists (i.e. wasn't deleted)
+  """
   lower = iama.title.lower()
-  return (estimate_future_comments(iama, time.time()) > MIN_COMMENTS and
-          'ama request' not in lower and
-          '[request]' not in lower and
-          iama.author != u'[deleted]')
+  return (
+    estimate_future_comments(iama, time.time()) > MIN_COMMENTS and
+    'ama request' not in lower and
+    '[request]' not in lower and
+    iama.author != u'[deleted]'
+  )
 
 
 def relpath(path):
+  """takes a reddit path and returns the relative path"""
   if path.startswith(BASE_URL):
     path = path[len(BASE_URL):]
   return path
 
 
 def main():
+  # establish db and reddit connections
   connection = pymongo.Connection(MONGO_URI)
   db = connection[DB_NAME]
   api = narwal.connect(USERNAME, PASSWORD, user_agent='narwal_bot iama bot')
+  
+  # given a url, process it.
+  # otherwise, process all qualifying iamas on r/iama's frontpage
   if len(sys.argv) == 2:
     iama = api.get(relpath(sys.argv[1]))[0][0]
     process_iama(db, iama)
@@ -239,3 +253,4 @@ def main():
 
 if __name__ == "__main__":
   main()
+  pass
