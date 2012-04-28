@@ -15,6 +15,7 @@ MONGO_URI = os.environ['MONGOLAB_URI']
 DB_NAME = urlparse.urlparse(MONGO_URI).path.strip('/')
 MIN_COMMENTS = int(os.environ.get('IAMA_MIN_COMMENTS', 200))
 WAIT_TIME = float(os.environ.get('IAMA_WAIT_TIME', 60.0))
+MAX_COMMENT_LENGTH = 10000
 
 BASE_URL = u'http://www.reddit.com/'
 TIME_FORMAT = u"%b %d, %Y @ %I:%M:%S %P EST"
@@ -24,7 +25,7 @@ HEADER_FORMAT = (
   u'*****\n'
 )
 SECOND_HEADER_FORMAT = (
-  u'(page {})\n\n'
+  u'(page {page})\n\n'
   u'*****\n'
 )
 FOOTER = (
@@ -44,12 +45,12 @@ TOP_FORMAT = (
 )
 
 
-def quotify(s):
-  return u'> {}'.format(s.replace('\n', '\n> '))
-
-
 def log(s):
   print s.encode('utf8')
+
+
+def quotify(s):
+  return u'> {}'.format(s.replace('\n', '\n> '))
 
 
 def get_qa(first_comments, author):
@@ -71,44 +72,78 @@ def get_qa(first_comments, author):
     return lst
 
 
-def est_future_comments(link, now=None):
-  now = now or time.time()
-  return int((link.num_comments / (now - link.created_utc)) * (60*60) + link.num_comments)
+def format_header(host):
+  return HEADER_FORMAT.format(
+    last_updated=time.strftime(TIME_FORMAT, time.localtime()),
+    host=host
+  )
 
 
-def format_qa(qalst, host, limit=10000):
+def format_second_header(page):
+  return SECOND_HEADER_FORMAT.format(
+    page=page
+  )
+
+
+def format_top_level(answer):
+  return TOP_FORMAT.format(
+    alink=answer.permalink,
+    answer=quotify(answer.body)
+  )
+
+
+def format_normal(host, question, answer):
+  abody = answer.body
+  if len(abody) > (MAX_COMMENT_LENGTH -
+                   len(QA_FORMAT) -
+                   len(HEADER_FORMAT) -
+                   len(FOOTER)):
+    abody = (
+      u'{body} ...\n\n'
+      u'(This answer was too long to fit.  [See the full response.]({link}))'
+    ).format(
+      answer.body.split('\n')[0][:100],
+      answer.permalink
+    )
+  return QA_FORMAT.format(
+    qlink=question.permalink,
+    alink=answer.permalink,
+    asker=question.author if question.author else u'[deleted]',
+    question=quotify(question.body if question.body else u'[deleted]'),
+    host=host,
+    answer=quotify(abody)
+  )
+
+
+def format_qa(qalst, host, limit=MAX_COMMENT_LENGTH):
   if not qalst:
     return []
   
-  rlst = []
-  slst = [HEADER_FORMAT.format(last_updated=time.strftime(TIME_FORMAT, time.localtime()),
-                               host=host)]
-  charcount = len(slst[0])
+  pages = []
+  sections = [format_header(host)]
+  charcount = len(sections[0])
   page = 1
-  for q, a in qalst:
-    if q:
-      s = QA_FORMAT.format(qlink=q.permalink,
-                           alink=a.permalink,
-                           asker=q.author if q.author else u'[deleted]',
-                           question=quotify(q.body if q.body else u'[deleted]'),
-                           host=host,
-                           answer=quotify(a.body))
+  move_on = False
+  for question, answer in qalst:
+    if question:
+      s = format_normal(host, question, answer)
     else:
-      s = TOP_FORMAT.format(alink=a.permalink, answer=quotify(a.body))
+      s = format_top_level(answer)
     charcount += len(s) + 1
-    if charcount >= (limit - len(FOOTER)):
-      slst.append(FOOTER)
-      rlst.append(u'\n'.join(slst))
+    if (page == 1 and move_on) or charcount >= (limit - len(FOOTER)):
+      sections.append(FOOTER)
+      pages.append(u'\n'.join(sections))
       page += 1
-      header = SECOND_HEADER_FORMAT.format(page) 
-      slst = [header,
-              s]
+      header = format_second_header(page)
+      sections = [header, s]
       charcount = len(s) + len(header) + 2
     else:
-      slst.append(s)
-  if slst:
-    rlst.append(u'\n'.join(slst))
-  return rlst
+      sections.append(s)
+      if page == 1:
+        move_on = True
+  if sections:
+    pages.append(u'\n'.join(sections))
+  return pages
 
 
 def mysleep():
@@ -168,22 +203,34 @@ def process_iama(db, iama):
   log(u'Finished: {}'.format(iama.permalink))
 
 
+def estimate_future_comments(link, now=None):
+  now = now or time.time()
+  return int((link.num_comments / (now - link.created_utc)) * (60 * 60) + link.num_comments)
+
+
+def qualifies(iama):
+  lower = iama.title.lower()
+  return (estimate_future_comments(iama, time.time()) > MIN_COMMENTS and
+          'ama request' not in lower and
+          '[request]' not in lower and
+          iama.author != u'[deleted]')
+
+
+def relpath(path):
+  if path.startswith(BASE_URL):
+    path = path[len(BASE_URL):]
+  return path
+
+
 def main():
   connection = pymongo.Connection(MONGO_URI)
   db = connection[DB_NAME]
   api = narwal.connect(USERNAME, PASSWORD, user_agent='narwal_bot iama bot')
   if len(sys.argv) == 2:
-    path = sys.argv[1]
-    if path.startswith(BASE_URL):
-      path = path[len(BASE_URL):]
-    iama = api.get(path)[0][0]
+    iama = api.get(relpath(sys.argv[1]))[0][0]
     process_iama(db, iama)
   else:
-    now = time.time()
-    iamas = [iama for iama in api.hot('iama')
-             if (est_future_comments(iama, now) > MIN_COMMENTS and
-                 'ama request' not in iama.title.lower() and
-                 iama.author != u'[deleted]')]
+    iamas = [iama for iama in api.hot('iama') if qualifies(iama)]
     log(u'Processing {} IAMAs...'.format(len(iamas)))
     for iama in iamas:
       process_iama(db, iama)
