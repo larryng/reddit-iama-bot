@@ -9,6 +9,7 @@ import pymongo
 import urlparse
 
 
+USER_AGENT = os.environ['USER_AGENT']
 USERNAME = os.environ['REDDIT_USERNAME']
 PASSWORD = os.environ['REDDIT_PASSWORD']
 MONGO_URI = os.environ['MONGOLAB_URI']
@@ -236,7 +237,7 @@ def main():
   # establish db and reddit connections
   connection = pymongo.Connection(MONGO_URI)
   db = connection[DB_NAME]
-  api = narwal.connect(USERNAME, PASSWORD, user_agent='narwal_bot iama bot')
+  api = narwal.connect(USERNAME, PASSWORD, user_agent=USER_AGENT)
   
   # given a url, process it.
   # otherwise, process all qualifying iamas on r/iama's frontpage
