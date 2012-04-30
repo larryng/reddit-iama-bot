@@ -291,6 +291,8 @@ def main():
   # given a url, process it.
   # otherwise, process all qualifying iamas on r/iama's frontpage
   if len(sys.argv) == 2:
+    # this will actually make an extra request, but oh well.  it's just for
+    # testing process_iama() and is not a problem in production
     iama = api.get(relpath(sys.argv[1]))[0][0]
     process_iama(iama, db=db)
   else:
