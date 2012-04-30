@@ -46,15 +46,26 @@ TOP_FORMAT = (
 )
 
 
+def get_db():
+  connection = pymongo.Connection(MONGO_URI)
+  return connection[DB_NAME]
+
+
 def log(s):
-  print s.encode('utf8')
+  print s.encode('utf8') # heroku can't log unicode
 
 
 def quotify(s):
+  """reddit markdown quotes a string"""
   return u'> {}'.format(s.replace('\n', '\n> '))
 
 
 def get_qalst(host, first_comments):
+  """returns list of (question, answer) comment pairs
+  
+  parameters:
+  - host: string username of iama host
+  - first_comments: top-level comments listing, ie. iama.comments()"""
   def helper(comments, parent=None):
     lst = []
     for comment in comments:
@@ -74,6 +85,7 @@ def get_qalst(host, first_comments):
 
 
 def format_header(host):
+  """formats header for our bot's first comment"""
   return HEADER_FORMAT.format(
     last_updated=time.strftime(TIME_FORMAT, time.localtime()),
     host=host
@@ -81,12 +93,14 @@ def format_header(host):
 
 
 def format_second_header(page):
+  """formats header for our bot's subsequent comments"""
   return SECOND_HEADER_FORMAT.format(
     page=page
   )
 
 
 def format_top_level(answer):
+  """formats host's top-level comment"""
   return TOP_FORMAT.format(
     alink=answer.permalink,
     answer=quotify(answer.body)
@@ -94,6 +108,7 @@ def format_top_level(answer):
 
 
 def format_normal(host, question, answer):
+  """formats question/answer pair"""
   abody = answer.body
   if len(abody) > (MAX_COMMENT_LENGTH -
                    len(QA_FORMAT) -
@@ -117,6 +132,7 @@ def format_normal(host, question, answer):
 
 
 def generate_pages(host, qalst, limit=MAX_COMMENT_LENGTH):
+  """generates a list of pages from a list of question/answer pairs, where each page is to be posted as a comment"""
   if not qalst:
     return []
   
@@ -148,32 +164,38 @@ def generate_pages(host, qalst, limit=MAX_COMMENT_LENGTH):
 
 
 def mysleep():
+  """just time.sleep() with a log message"""
   log(u'Waiting {} seconds...'.format(WAIT_TIME))
   time.sleep(WAIT_TIME)
 
 
-def process_iama(db, iama):
-  log(u'Processing {} ...'.format(iama.permalink))
-  host = iama.author
-  comments = iama.comments()
+def post_pages(iama, pages, db=None):
+  """post the generated comments to the iama, ensuring that:
+    a. we don't spam with duplicate comments if we already processed this iama
+    b. if we already processed the iama, update/edit the comment instead of
+       posting again
+    c. don't make an edit if nothing changed (reduce POST requests to reduce
+       chance we get rate-limited)
+  """
+  if not db:
+    db = get_db()
   
-  qalst = get_qalst(host, comments) # list of (question, answer) pairs
-  if not qalst:
-    return
-  pages = generate_pages(host, qalst)
-  
+  # get the old generated pages from our database
   query = {'link': iama.permalink}
-  old_comp = db.comps.find_one(query)
+  old_comp = db.comps.find_one(query) # 'comp' as in 'compilation'
   old_pages = old_comp['pages'] if old_comp else None
   
   new_pages = []
-  rid = iama.name
+  rid = iama.name # reddit id (aka. "full name") of the thing to comment to or
+                  # edit.  it may seem odd at first that the same variable is
+                  # used for both of these situations, but it makes sense if you
+                  # follow the logic.
   try:
     for i, page in enumerate(pages):
       sleep = True
       if old_pages and i < len(old_pages):
         rid = old_pages[i]['rid']
-        if i == 0 or page != old_pages[i]['body']:
+        if page != old_pages[i]['body']:
           c = iama._reddit.edit(rid, page)
           log(u'Edited {}'.format(c.permalink))
         else:
@@ -186,19 +208,47 @@ def process_iama(db, iama):
       new_pages.append({'rid': rid,
                         'body': page})
       if sleep:
-        mysleep()
+        mysleep() # sleep after POSTs so we don't get rate limited
   except Exception as e:
+    # just crash if something goes wrong.  it's not the end of the world if we
+    # miss an update.
     raise e
   finally:
     log(u'Saving what we did to DB...')
+    
+    # don't lose old data if something went awry while processing
     if old_pages and len(old_pages) > len(new_pages):
       new_pages = new_pages + old_pages[len(new_pages):]
+    
+    # save to db
     new_comp = {'link': iama.permalink,
                 'pages': new_pages}
     db.comps.update(query, 
                     {'$set': new_comp},
                     upsert=True)
     log(u'... done.')
+
+
+def process_iama(iama, db=None):
+  """processes an iama:
+  
+  1. aggregate list of question/answer pairs from the iama
+  2. from that list, generate the comments to be posted
+  3. post the generated comments to the iama
+  """
+  log(u'Processing {} ...'.format(iama.permalink))
+  host = iama.author
+  comments = iama.comments()
+  
+  # aggregate list of q/a pairs from the iama
+  qalst = get_qalst(host, comments)
+  if not qalst:
+    return
+  
+  # generate our comments to be posted
+  pages = generate_pages(host, qalst)
+  
+  post_pages(iama, pages, db=db)
   log(u'Finished: {}'.format(iama.permalink))
 
 
@@ -235,20 +285,19 @@ def relpath(path):
 
 def main():
   # establish db and reddit connections
-  connection = pymongo.Connection(MONGO_URI)
-  db = connection[DB_NAME]
+  db = get_db()
   api = narwal.connect(USERNAME, PASSWORD, user_agent=USER_AGENT)
   
   # given a url, process it.
   # otherwise, process all qualifying iamas on r/iama's frontpage
   if len(sys.argv) == 2:
     iama = api.get(relpath(sys.argv[1]))[0][0]
-    process_iama(db, iama)
+    process_iama(iama, db=db)
   else:
     iamas = [iama for iama in api.hot('iama') if qualifies(iama)]
     log(u'Processing {} IAMAs...'.format(len(iamas)))
     for iama in iamas:
-      process_iama(db, iama)
+      process_iama(iama, db=db)
     log(u'Processing done.'.encode('utf8'))
 
 
