@@ -81,7 +81,7 @@ def get_qalst(host, first_comments):
   if qalst:
     return sorted(qalst, key=lambda (p, c): c.created)
   else:
-    return lst
+    return qalst
 
 
 def format_header(host):
