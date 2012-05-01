@@ -14,7 +14,7 @@ go.py
 Running `python go.py` basically does this:
 
 1. Gets the hottest 25 IAMAs from r/iama.
-2. Reduces the list down to those that will likely have at least a minimum number of comments (currently 200).
+2. Reduces the list down to those that will likely have at least a minimum number of comments (currently set to 200).
 3. For each IAMA in the list:
    * compiles a list of questions and answers
    * posts the list in the IAMA as a chain of comments
