@@ -1,1 +1,1 @@
-go: python go.py
+go: python iama/go.py

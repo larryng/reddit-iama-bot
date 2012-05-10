@@ -1,21 +1,15 @@
-#!/usr/bin/python
 # -*- coding: utf8 -*- 
 
-import os
 import sys
 import time
+import datetime
 import narwal
 import pymongo
-import urlparse
+
+from utils import get_db, log, quotify
+from envvars import USERNAME, PASSWORD, MIN_COMMENTS, USER_AGENT, WAIT_TIME
 
 
-USER_AGENT = os.environ['USER_AGENT']
-USERNAME = os.environ['REDDIT_USERNAME']
-PASSWORD = os.environ['REDDIT_PASSWORD']
-MONGO_URI = os.environ['MONGOLAB_URI']
-DB_NAME = urlparse.urlparse(MONGO_URI).path.strip('/')
-MIN_COMMENTS = int(os.environ.get('IAMA_MIN_COMMENTS', 200))
-WAIT_TIME = float(os.environ.get('IAMA_WAIT_TIME', 60.0))
 MAX_COMMENT_LENGTH = 10000
 
 BASE_URL = u'http://www.reddit.com/'
@@ -46,20 +40,6 @@ TOP_FORMAT = (
 )
 
 
-def get_db():
-  connection = pymongo.Connection(MONGO_URI)
-  return connection[DB_NAME]
-
-
-def log(s):
-  print s.encode('utf8') # heroku can't log unicode
-
-
-def quotify(s):
-  """reddit markdown quotes a string"""
-  return u'> {}'.format(s.replace('\n', '\n> '))
-
-
 def get_qalst(host, first_comments):
   """returns list of (question, answer) comment pairs
   
@@ -87,7 +67,8 @@ def get_qalst(host, first_comments):
 def format_header(host):
   """formats header for our bot's first comment"""
   return HEADER_FORMAT.format(
-    last_updated=time.strftime(TIME_FORMAT, time.localtime()),
+    last_updated=datetime.datetime.strftime(datetime.datetime.now(),
+                                            TIME_FORMAT),
     host=host
   )
 
@@ -222,7 +203,10 @@ def post_pages(iama, pages, db=None):
     
     # save to db
     new_comp = {'link': iama.permalink,
-                'pages': new_pages}
+                'pages': new_pages,
+                'updated': datetime.datetime.now()} # yes, this will be slightly
+                                                    # off, but who cares?
+    
     db.comps.update(query, 
                     {'$set': new_comp},
                     upsert=True)
