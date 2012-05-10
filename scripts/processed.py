@@ -1,6 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
 
+"""
+processed.py
+~~~~~~~~~~~~
+
+Print links to our root comments in processed IAMAs.
+
+"""
+
 import os
 import sys
 import pymongo

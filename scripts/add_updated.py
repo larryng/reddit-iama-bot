@@ -1,6 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
 
+"""
+add_updated.py
+~~~~~~~~~~~~~~
+
+Add 'updated' date field to all of our saved documents.  The date saved is
+grabbed from the header line: "(updated: ...)".
+
+"""
+
 import os
 import sys
 
