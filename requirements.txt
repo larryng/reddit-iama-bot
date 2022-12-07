@@ -1,4 +1,4 @@
-certifi==0.0.8
+certifi==2022.12.7
 chardet==1.0.1
 distribute==0.6.24
 narwal==0.3.0b
